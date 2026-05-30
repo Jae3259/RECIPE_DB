@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import claude_client
 import notion_client
 import youtube_client
 
@@ -143,9 +144,22 @@ def run():
             logger.error(f"중복 체크 실패 ({vid}): {e}")
             continue
 
+        # description 정제 시도 (실패 시 원본 사용)
+        raw_desc = video["description"]
+        try:
+            cleaned_desc = claude_client.clean_description(raw_desc)
+            if cleaned_desc:
+                logger.info(f"Description 정제: {len(raw_desc)}자 → {len(cleaned_desc)}자")
+            else:
+                cleaned_desc = raw_desc
+                logger.info("Description 정제 결과 없음. 원본 사용.")
+        except Exception as e:
+            cleaned_desc = raw_desc
+            logger.warning(f"Description 정제 실패, 원본 사용: {e}")
+
         case, status = classify_case(
             video["duration_seconds"],
-            video["description"],
+            cleaned_desc,
             video["has_subtitle"],
         )
         logger.info(f"[{case}] {video['title'][:60]} ({vid})")
@@ -156,7 +170,7 @@ def run():
                 youtube_url=url,
                 channel_name=video["channel_name"],
                 source_type="Keyword",
-                description=video["description"],
+                description=cleaned_desc,
                 has_subtitle=video["has_subtitle"],
                 subtitle_text=video["subtitle_text"],
                 thumbnail_url=video["thumbnail_url"],
