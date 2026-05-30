@@ -1,31 +1,30 @@
-import json
 import logging
-import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-import youtube_client
-import claude_client
 import notion_client
+import youtube_client
 
 
 LOG_DIR = Path("logs")
-DATA_DIR = Path("data/recipes")
 DAILY_LIMIT = 3
-SEARCH_QUERY = "cooking recipe"
+YOUTUBE_SEARCH_POOL = 10  # 키워드당 검색 결과 최대 수
+
+INGREDIENT_UNIT_PATTERN = re.compile(
+    r"\b\d+[\s./-]*(cups?|tbsp|tsp|tablespoons?|teaspoons?|g|kg|ml|l|oz|lb|lbs|cloves?|slices?|pieces?)\b",
+    re.IGNORECASE,
+)
 
 
 def setup_logger() -> logging.Logger:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
     today = datetime.now().strftime("%Y%m%d")
     log_file = LOG_DIR / f"run_{today}.log"
 
     logger = logging.getLogger("collect")
     logger.setLevel(logging.INFO)
-
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
     fh = logging.FileHandler(log_file, encoding="utf-8")
@@ -39,63 +38,116 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
+def classify_case(duration_seconds: int, description: str, has_subtitle: bool) -> tuple[str, str]:
+    """(case, status) 반환"""
+    if duration_seconds <= 60:
+        return "D (Skip)", "제외"
+    if _has_ingredient_list(description):
+        return "A (Auto)", "자동처리중"
+    if has_subtitle:
+        return "B (Semi)", "자막대기"
+    return "C (Manual)", "수동대기"
+
+
+def _has_ingredient_list(description: str) -> bool:
+    if not description:
+        return False
+    matches = INGREDIENT_UNIT_PATTERN.findall(description)
+    return len(matches) >= 3
+
+
 def run():
     logger = setup_logger()
     logger.info("=== 수집 시작 ===")
 
+    # 1. 키워드 목록 가져오기
+    try:
+        keywords = notion_client.get_active_keywords()
+    except Exception as e:
+        logger.error(f"Notion 키워드 조회 실패: {e}")
+        sys.exit(1)
+
+    if not keywords:
+        logger.warning("Active 키워드 없음. 종료.")
+        return
+
+    # 2. 키워드 선택 (Priority 가중치 랜덤)
+    selected = notion_client.pick_keyword(keywords)
+    logger.info(f"선택된 키워드: '{selected['keyword']}' (Priority: {selected['priority']})")
+
+    # 3. YouTube 검색
     try:
         videos = youtube_client.search_recipe_videos(
-            query=SEARCH_QUERY, max_results=DAILY_LIMIT
+            keyword=selected["keyword"],
+            max_results=YOUTUBE_SEARCH_POOL,
         )
     except Exception as e:
-        logger.error(f"YouTube API 오류 — quota 초과 또는 키 문제: {e}")
-        logger.info("내일 재시도 예정. 파이프라인 종료.")
+        logger.error(f"YouTube API 오류 (quota 초과 또는 키 문제): {e}")
+        logger.info("내일 재시도 예정.")
         sys.exit(0)
 
     if not videos:
-        logger.warning("조건에 맞는 영상 없음 (조회수 5천↑). 종료.")
+        logger.warning("검색 결과 없음.")
         return
 
-    logger.info(f"수집 대상 영상 {len(videos)}개")
+    logger.info(f"YouTube 검색 결과: {len(videos)}개")
 
-    success = 0
+    # 4. 영상별 처리
+    saved_count = 0
     for video in videos:
-        vid = video["video_id"]
-        logger.info(f"처리 중: {video['title']} ({vid})")
+        if saved_count >= DAILY_LIMIT:
+            break
 
+        vid = video["video_id"]
+        url = video["youtube_url"]
+
+        # 중복 체크
         try:
-            recipe = claude_client.extract_recipe(
-                title=video["title"],
-                channel=video["channel_name"],
-                description=video["description"],
-            )
+            if notion_client.is_duplicate_url(url):
+                logger.info(f"중복 skip: {url}")
+                continue
         except Exception as e:
-            logger.error(f"Claude API 오류 ({vid}): {e}")
+            logger.error(f"중복 체크 실패 ({vid}): {e}")
             continue
 
-        # 로컬 백업
-        backup_path = DATA_DIR / f"{vid}.json"
-        backup_path.write_text(
-            json.dumps({**video, **recipe}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        case, status = classify_case(
+            video["duration_seconds"],
+            video["description"],
+            video["has_subtitle"],
         )
+        logger.info(f"[{case}] {video['title'][:60]} ({vid})")
 
         try:
-            page_id = notion_client.save_recipe(
-                dish_name=recipe.get("dish_name", "unknown"),
-                origin_country=recipe.get("origin_country", "unknown"),
-                ingredients=recipe.get("ingredients", []),
-                youtube_url=video["youtube_url"],
-                view_count=video["view_count"],
+            notion_client.save_video(
+                title=video["title"],
+                youtube_url=url,
                 channel_name=video["channel_name"],
+                source_type="Keyword",
+                description=video["description"],
+                has_subtitle=video["has_subtitle"],
+                subtitle_text=video["subtitle_text"],
+                thumbnail_url=video["thumbnail_url"],
+                tags=video["tags"],
+                duration_seconds=video["duration_seconds"],
+                view_count=video["view_count"],
+                published_at=video["published_at"],
+                case=case,
+                status=status,
             )
-            logger.info(f"Notion 저장 완료: {recipe.get('dish_name')} (page_id={page_id})")
-            success += 1
+            logger.info(f"Notion 저장 완료: {video['title'][:60]}")
+            saved_count += 1
         except Exception as e:
-            # Notion 저장 실패 시 로그만 남기고 계속 진행
             logger.error(f"Notion 저장 실패 ({vid}): {e}")
 
-    logger.info(f"=== 수집 완료: {success}/{len(videos)} 성공 ===")
+    # 5. 키워드 사용 기록 업데이트
+    try:
+        current_count = None  # Search count는 Notion에서 직접 읽지 않고 누적만 함
+        notion_client.update_keyword_searched(selected["page_id"], current_count)
+        logger.info(f"키워드 Last searched 업데이트 완료: {selected['keyword']}")
+    except Exception as e:
+        logger.error(f"키워드 업데이트 실패: {e}")
+
+    logger.info(f"=== 수집 완료: {saved_count}/{DAILY_LIMIT} 저장 ===")
 
 
 if __name__ == "__main__":

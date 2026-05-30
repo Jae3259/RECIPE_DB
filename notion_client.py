@@ -1,10 +1,16 @@
 import os
-from datetime import datetime, timezone
+import random
 import requests
+from datetime import datetime, timezone
 
 
 NOTION_API_BASE = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
+
+SEARCH_KEYWORDS_DB_ID = "aa657f4f-8031-4cc5-bbbe-f3bdbca9fa33"
+RAW_VIDEO_DB_ID = "370275ea-061b-804c-8b93-000ba754153b"
+
+PRIORITY_WEIGHTS = {"높음": 3, "중간": 2, "낮음": 1}
 
 
 def _headers() -> dict:
@@ -15,42 +21,108 @@ def _headers() -> dict:
     }
 
 
-def save_recipe(
-    dish_name: str,
-    origin_country: str,
-    ingredients: list[str],
+def get_active_keywords() -> list[dict]:
+    """Active 키워드 목록 반환. Priority 가중치 포함."""
+    url = f"{NOTION_API_BASE}/databases/{SEARCH_KEYWORDS_DB_ID}/query"
+    payload = {
+        "filter": {
+            "property": "Active",
+            "checkbox": {"equals": True},
+        }
+    }
+    resp = requests.post(url, headers=_headers(), json=payload, timeout=10)
+    resp.raise_for_status()
+
+    keywords = []
+    for page in resp.json().get("results", []):
+        props = page["properties"]
+        en_kw = _get_text(props, "EN keyword")
+        ko_kw = _get_text(props, "KO keyword")
+        keyword = en_kw or ko_kw
+        if not keyword:
+            continue
+        priority = _get_select(props, "Priority") or "낮음"
+        last_searched = _get_date(props, "date:Last searched:start")
+        keywords.append({
+            "page_id": page["id"],
+            "keyword": keyword,
+            "priority": priority,
+            "weight": PRIORITY_WEIGHTS.get(priority, 1),
+            "last_searched": last_searched,
+        })
+
+    return keywords
+
+
+def pick_keyword(keywords: list[dict]) -> dict:
+    """Priority 가중치 반영 랜덤 선택."""
+    weights = [k["weight"] for k in keywords]
+    return random.choices(keywords, weights=weights, k=1)[0]
+
+
+def is_duplicate_url(youtube_url: str) -> bool:
+    """Raw Video DB에 같은 URL이 이미 있는지 확인."""
+    url = f"{NOTION_API_BASE}/databases/{RAW_VIDEO_DB_ID}/query"
+    payload = {
+        "filter": {
+            "property": "URL",
+            "url": {"equals": youtube_url},
+        },
+        "page_size": 1,
+    }
+    resp = requests.post(url, headers=_headers(), json=payload, timeout=10)
+    resp.raise_for_status()
+    return len(resp.json().get("results", [])) > 0
+
+
+def save_video(
+    title: str,
     youtube_url: str,
-    view_count: int,
     channel_name: str,
+    source_type: str,
+    description: str,
+    has_subtitle: bool,
+    subtitle_text: str | None,
+    thumbnail_url: str,
+    tags: str,
+    duration_seconds: int,
+    view_count: int,
+    published_at: str,
+    case: str,
+    status: str,
 ) -> str:
-    database_id = os.environ["NOTION_DATABASE_ID"]
-    collected_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    collected_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    properties = {
+        "Title": {"title": [{"text": {"content": title}}]},
+        "Channel name": {"rich_text": [{"text": {"content": channel_name}}]},
+        "Source type": {"select": {"name": source_type}},
+        "Description": {"rich_text": [{"text": {"content": description[:2000]}}]},
+        "Has subtitle": {"checkbox": has_subtitle},
+        "Thumbnail URL": {"url": thumbnail_url or None},
+        "Tags": {"rich_text": [{"text": {"content": tags[:2000]}}]},
+        "Duration": {"number": duration_seconds},
+        "View count": {"number": view_count},
+        "Case": {"select": {"name": case}},
+        "Status": {"select": {"name": status}},
+        "date:Collected date:start": {"date": {"start": collected_at}},
+    }
+
+    # URL 필드
+    if youtube_url:
+        properties["URL"] = {"url": youtube_url}
+
+    # Subtitle text
+    if subtitle_text:
+        properties["Subtitle text"] = {"rich_text": [{"text": {"content": subtitle_text[:2000]}}]}
+
+    # Published date
+    if published_at:
+        properties["date:Published date:start"] = {"date": {"start": published_at}}
 
     payload = {
-        "parent": {"database_id": database_id},
-        "properties": {
-            "dish_name": {
-                "title": [{"text": {"content": dish_name}}]
-            },
-            "origin_country": {
-                "select": {"name": origin_country}
-            },
-            "ingredients": {
-                "rich_text": [{"text": {"content": ", ".join(ingredients)}}]
-            },
-            "youtube_url": {
-                "url": youtube_url
-            },
-            "view_count": {
-                "number": view_count
-            },
-            "collected_at": {
-                "date": {"start": collected_at}
-            },
-            "channel_name": {
-                "rich_text": [{"text": {"content": channel_name}}]
-            },
-        },
+        "parent": {"database_id": RAW_VIDEO_DB_ID},
+        "properties": properties,
     }
 
     resp = requests.post(
@@ -61,3 +133,40 @@ def save_recipe(
     )
     resp.raise_for_status()
     return resp.json()["id"]
+
+
+def update_keyword_searched(page_id: str, current_count: int | None) -> None:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    new_count = (current_count or 0) + 1
+
+    payload = {
+        "properties": {
+            "date:Last searched:start": {"date": {"start": today}},
+            "Search count": {"number": new_count},
+        }
+    }
+    resp = requests.patch(
+        f"{NOTION_API_BASE}/pages/{page_id}",
+        headers=_headers(),
+        json=payload,
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+# --- helpers ---
+
+def _get_text(props: dict, name: str) -> str:
+    field = props.get(name, {})
+    rich = field.get("rich_text", [])
+    return rich[0]["plain_text"] if rich else ""
+
+
+def _get_select(props: dict, name: str) -> str | None:
+    sel = props.get(name, {}).get("select")
+    return sel["name"] if sel else None
+
+
+def _get_date(props: dict, name: str) -> str | None:
+    date = props.get(name, {}).get("date")
+    return date["start"] if date else None
