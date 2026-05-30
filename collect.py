@@ -26,6 +26,16 @@ def _normalize_keyword(keyword: str, lang: str) -> str:
             return keyword + " recipe"
     return keyword
 
+
+def _resolve_search_keyword(selected: dict) -> tuple[str, str]:
+    """Native → EN → KO 우선순위로 검색어와 relevanceLanguage 반환."""
+    native_kw = selected.get("native_kw", "")
+    lang = selected.get("lang", "en")
+    if native_kw:
+        return native_kw, lang
+    keyword = selected.get("keyword", "")
+    return _normalize_keyword(keyword, lang), lang
+
 INGREDIENT_UNIT_PATTERN = re.compile(
     r"\b\d+[\s./-]*(cups?|tbsp|tsp|tablespoons?|teaspoons?|g|kg|ml|l|oz|lb|lbs|cloves?|slices?|pieces?)\b",
     re.IGNORECASE,
@@ -93,15 +103,16 @@ def run():
         logger.info(f"0순위 키워드 {len(zero_priority)}개 중 선택")
     else:
         selected = notion_client.pick_keyword(keywords)
-    raw_kw = selected["keyword"]
-    search_kw = _normalize_keyword(raw_kw, selected.get("lang", "en"))
-    logger.info(f"선택된 키워드: '{raw_kw}' → 검색어: '{search_kw}' (Priority: {selected['priority']})")
+    raw_kw = selected.get("native_kw") or selected["keyword"]
+    search_kw, rel_lang = _resolve_search_keyword(selected)
+    logger.info(f"선택된 키워드: '{raw_kw}' → 검색어: '{search_kw}' (Priority: {selected['priority']}, lang: {rel_lang})")
 
     # 3. YouTube 검색
     try:
         videos = youtube_client.search_recipe_videos(
             keyword=search_kw,
             max_results=YOUTUBE_SEARCH_POOL,
+            relevance_language=rel_lang,
         )
     except Exception as e:
         logger.error(f"YouTube API 오류 (quota 초과 또는 키 문제): {e}")

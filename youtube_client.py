@@ -7,7 +7,7 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, Tran
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
 
-def search_recipe_videos(keyword: str, max_results: int = 10) -> list[dict]:
+def search_recipe_videos(keyword: str, max_results: int = 10, relevance_language: str = "en") -> list[dict]:
     api_key = os.environ["YOUTUBE_API_KEY"]
 
     params = {
@@ -17,6 +17,7 @@ def search_recipe_videos(keyword: str, max_results: int = 10) -> list[dict]:
         "videoCategoryId": "26",  # Howto & Style — 요리 튜토리얼 카테고리
         "order": "relevance",
         "maxResults": max_results,
+        "relevanceLanguage": relevance_language,
         "key": api_key,
     }
 
