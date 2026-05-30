@@ -85,8 +85,14 @@ def run():
         logger.warning("Active 키워드 없음. 종료.")
         return
 
-    # 2. 키워드 선택 (Priority 가중치 랜덤)
-    selected = notion_client.pick_keyword(keywords)
+    # 2. 키워드 선택 — 0순위 있으면 우선, 없으면 가중치 랜덤
+    zero_priority = [k for k in keywords if k["priority"] == "0순위"]
+    if zero_priority:
+        import random as _random
+        selected = _random.choice(zero_priority)
+        logger.info(f"0순위 키워드 {len(zero_priority)}개 중 선택")
+    else:
+        selected = notion_client.pick_keyword(keywords)
     raw_kw = selected["keyword"]
     search_kw = _normalize_keyword(raw_kw, selected.get("lang", "en"))
     logger.info(f"선택된 키워드: '{raw_kw}' → 검색어: '{search_kw}' (Priority: {selected['priority']})")
