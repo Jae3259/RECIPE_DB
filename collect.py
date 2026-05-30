@@ -86,7 +86,7 @@ def run():
         return
 
     # 2. 키워드 선택 — 0순위 있으면 우선, 없으면 가중치 랜덤
-    zero_priority = [k for k in keywords if k["priority"] == "0순위"]
+    zero_priority = [k for k in keywords if k["priority"] == "0"]
     if zero_priority:
         import random as _random
         selected = _random.choice(zero_priority)
