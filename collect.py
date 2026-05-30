@@ -4,7 +4,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import claude_client
 import notion_client
 import youtube_client
 
@@ -169,31 +168,8 @@ def run():
                 status=status,
             )
             logger.info(f"Notion 저장 완료: {video['title'][:60]}")
-            saved_count += 1
-
-            # Case A/B: Claude 추출 → Recipe DB 저장
-            if case in ("A (Auto)", "B (Semi)"):
-                text = video["description"] if case == "A (Auto)" else (video["subtitle_text"] or video["description"])
-                try:
-                    recipe = claude_client.extract_recipe(video["title"], video["channel_name"], text)
-                    if recipe.get("dish_name") and recipe["dish_name"] != "unknown":
-                        notion_client.save_recipe(
-                            dish_name=recipe["dish_name"],
-                            local_name=recipe.get("local_name", ""),
-                            country_of_origin=recipe.get("country_of_origin", ""),
-                            key_ingredients=recipe.get("key_ingredients", ""),
-                            cooking_techniques=recipe.get("cooking_techniques", []),
-                            main_category=recipe.get("main_category", []),
-                            meal_context=recipe.get("meal_context", []),
-                            serving_temperature=recipe.get("serving_temperature", ""),
-                            source_url=url,
-                            collected_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                        )
-                        logger.info(f"Recipe DB 저장 완료: {recipe['dish_name']}")
-                    else:
-                        logger.warning(f"Recipe 추출 실패 (dish_name unknown): {vid}")
-                except Exception as e:
-                    logger.error(f"Recipe 처리 실패 ({vid}): {e}")
+            if case != "D (Skip)":
+                saved_count += 1
         except Exception as e:
             logger.error(f"Notion 저장 실패 ({vid}): {e}")
 
