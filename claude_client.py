@@ -87,7 +87,7 @@ URL, 해시태그, SNS 링크, 광고, 협찬, 음악 크레딧은 모두 제거
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
-            messages=[{{"role": "user", "content": prompt}}],
+            messages=[{"role": "user", "content": prompt}],
         )
         return message.content[0].text.strip()
     except Exception:
