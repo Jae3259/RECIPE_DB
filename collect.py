@@ -37,7 +37,7 @@ def _resolve_search_keyword(selected: dict) -> tuple[str, str]:
     return _normalize_keyword(keyword, lang), lang
 
 INGREDIENT_UNIT_PATTERN = re.compile(
-    r"\b\d+[\s./-]*(cups?|tbsp|tsp|tablespoons?|teaspoons?|g|kg|ml|l|oz|lb|lbs|cloves?|slices?|pieces?)\b",
+    r"\b\d+[\s./-]*(cups?|tbsp|tsp|tablespoons?|teaspoons?|gr|g|kg|ml|cl|l|oz|lb|lbs|cloves?|slices?|pieces?)\b",
     re.IGNORECASE,
 )
 
