@@ -63,3 +63,32 @@ meal_context 허용값: Everyday meal, Fine dining, Festive, Street food, Brunch
             "key_ingredients": "", "cooking_techniques": [], "main_category": [],
             "meal_context": [], "serving_temperature": "",
         }
+
+
+def clean_description(description: str) -> str:
+    """
+    YouTube description에서 재료/조리법 관련 내용만 추출.
+    URL, 해시태그, SNS, 광고 제거. 실패 시 빈 문자열 반환.
+    """
+    if not description or len(description) < 50:
+        return description
+
+    prompt = f"""다음 YouTube 요리 영상 설명에서 재료 목록과 조리법 관련 내용만 추출해줘.
+URL, 해시태그, SNS 링크, 광고, 협찬, 음악 크레딧은 모두 제거해줘.
+레시피 관련 내용이 없으면 빈 문자열을 반환해줘.
+다른 설명 없이 추출된 텍스트만 반환해줘.
+
+---
+{description[:4000]}
+---"""
+
+    try:
+        client = _get_client()
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{{"role": "user", "content": prompt}}],
+        )
+        return message.content[0].text.strip()
+    except Exception:
+        return ""

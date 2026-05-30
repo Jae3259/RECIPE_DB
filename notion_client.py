@@ -104,7 +104,7 @@ def save_video(
         "Title": {"title": [{"text": {"content": title}}]},
         "Channel name": {"rich_text": [{"text": {"content": channel_name}}]},
         "Source type": {"select": {"name": source_type}},
-        "Description": {"rich_text": [{"text": {"content": description[:2000]}}]},
+        "Description": {"rich_text": _rich_text_chunks(description)},
         "Has subtitle": {"checkbox": has_subtitle},
         "Thumbnail URL": {"url": thumbnail_url or None},
         "Tags": {"rich_text": [{"text": {"content": tags[:2000]}}]},
@@ -121,7 +121,7 @@ def save_video(
 
     # Subtitle text
     if subtitle_text:
-        properties["Subtitle text"] = {"rich_text": [{"text": {"content": subtitle_text[:2000]}}]}
+        properties["Subtitle text"] = {"rich_text": _rich_text_chunks(subtitle_text)}
 
     # Published date
     if published_at:
@@ -175,6 +175,10 @@ def update_keyword_searched(page_id: str, current_count: int | None) -> None:
 
 
 # --- helpers ---
+
+def _rich_text_chunks(text: str, size: int = 2000) -> list[dict]:
+    return [{"text": {"content": text[i:i+size]}} for i in range(0, len(text), size)]
+
 
 def _get_text(props: dict, name: str) -> str:
     field = props.get(name, {})
