@@ -9,6 +9,7 @@ NOTION_VERSION = "2022-06-28"
 
 SEARCH_KEYWORDS_DB_ID = "612628cbef474ec089336969c19d66fd"
 RAW_VIDEO_DB_ID = "370275ea061b804eae24ea782c1f6e62"
+RECIPE_DB_ID = "363275ea061b80a38181ec76c5e90592"
 
 PRIORITY_WEIGHTS = {"1": 3, "2": 2, "3": 1}
 
@@ -173,6 +174,46 @@ def update_keyword_searched(page_id: str, current_count: int | None) -> None:
     )
     resp.raise_for_status()
 
+
+
+def save_recipe(
+    dish_name: str,
+    local_name: str,
+    country_of_origin: str,
+    key_ingredients: str,
+    cooking_techniques: list[str],
+    main_category: list[str],
+    meal_context: list[str],
+    serving_temperature: str,
+    source_url: str,
+    collected_date: str,
+) -> str:
+    properties = {
+        "Dish name": {"title": [{"text": {"content": dish_name}}]},
+    }
+    if local_name:
+        properties["Local name"] = {"rich_text": [{"text": {"content": local_name}}]}
+    if country_of_origin:
+        properties["Country of origin"] = {"select": {"name": country_of_origin}}
+    if key_ingredients:
+        properties["Key ingredients"] = {"rich_text": [{"text": {"content": key_ingredients}}]}
+    if cooking_techniques:
+        properties["Cooking techniques"] = {"multi_select": [{"name": t} for t in cooking_techniques]}
+    if main_category:
+        properties["Main category"] = {"multi_select": [{"name": c} for c in main_category]}
+    if meal_context:
+        properties["Meal context"] = {"multi_select": [{"name": m} for m in meal_context]}
+    if serving_temperature:
+        properties["Serving temperature"] = {"select": {"name": serving_temperature}}
+    if source_url:
+        properties["Source URL"] = {"url": source_url}
+    if collected_date:
+        properties["날짜"] = {"date": {"start": collected_date}}
+
+    payload = {"parent": {"database_id": RECIPE_DB_ID}, "properties": properties}
+    resp = requests.post(f"{NOTION_API_BASE}/pages", headers=_headers(), json=payload, timeout=10)
+    resp.raise_for_status()
+    return resp.json()["id"]
 
 # --- helpers ---
 
