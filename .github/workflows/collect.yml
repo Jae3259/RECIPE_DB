@@ -1,0 +1,46 @@
+name: Daily Recipe Collection
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # UTC 03:00 = KST 12:00
+  workflow_dispatch:      # 수동 트리거 가능
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install anthropic requests
+
+      - name: Run pipeline
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: python collect.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
+
+      - name: Upload recipe backups
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipes-${{ github.run_id }}
+          path: data/recipes/
+          retention-days: 90
