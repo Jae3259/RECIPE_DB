@@ -142,7 +142,20 @@ def save_video(
 
 def update_keyword_searched(page_id: str, current_count: int | None) -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    new_count = (current_count or 0) + 1
+    # current_count가 None이면 Notion에서 현재 값 읽어와서 누적
+    if current_count is None:
+        resp = requests.get(
+            f"{NOTION_API_BASE}/pages/{page_id}",
+            headers=_headers(),
+            timeout=10,
+        )
+        if resp.ok:
+            props = resp.json().get("properties", {})
+            sc = props.get("Search count", {}).get("number")
+            current_count = sc if sc is not None else 0
+        else:
+            current_count = 0
+    new_count = current_count + 1
 
     payload = {
         "properties": {
