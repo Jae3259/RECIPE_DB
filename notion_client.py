@@ -71,6 +71,9 @@ def is_duplicate_url(youtube_url: str) -> bool:
         "page_size": 1,
     }
     resp = requests.post(url, headers=_headers(), json=payload, timeout=10)
+    if resp.status_code == 400:
+        # URL 속성이 아직 없으면 중복 체크 생략하고 저장 진행
+        return False
     resp.raise_for_status()
     return len(resp.json().get("results", [])) > 0
 
