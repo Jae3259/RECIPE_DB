@@ -206,7 +206,7 @@ def save_recipe(
     if serving_temperature:
         properties["Serving temperature"] = {"select": {"name": serving_temperature}}
     if source_url:
-        properties["Source URL"] = {"url": source_url}
+        properties["Source URL"] = {"rich_text": [{"text": {"content": source_url}}]}
     if collected_date:
         properties["날짜"] = {"date": {"start": collected_date}}
 
