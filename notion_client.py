@@ -43,12 +43,14 @@ def get_active_keywords() -> list[dict]:
             continue
         priority = _get_select(props, "Priority") or "낮음"
         last_searched = _get_date(props, "date:Last searched:start")
+        lang = _get_select(props, "Native language") or "en"
         keywords.append({
             "page_id": page["id"],
             "keyword": keyword,
             "priority": priority,
             "weight": PRIORITY_WEIGHTS.get(priority, 1),
             "last_searched": last_searched,
+            "lang": lang,
         })
 
     return keywords
