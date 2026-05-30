@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 NOTION_API_BASE = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
 
-SEARCH_KEYWORDS_DB_ID = "aa657f4f-8031-4cc5-bbbe-f3bdbca9fa33"
-RAW_VIDEO_DB_ID = "370275ea-061b-804c-8b93-000ba754153b"
+SEARCH_KEYWORDS_DB_ID = "612628cbef474ec089336969c19d66fd"
+RAW_VIDEO_DB_ID = "370275ea061b804eae24ea782c1f6e62"
 
 PRIORITY_WEIGHTS = {"높음": 3, "중간": 2, "낮음": 1}
 
