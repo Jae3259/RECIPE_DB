@@ -12,6 +12,20 @@ LOG_DIR = Path("logs")
 DAILY_LIMIT = 3
 YOUTUBE_SEARCH_POOL = 10  # 키워드당 검색 결과 최대 수
 
+_RECIPE_SUFFIXES_EN = {"recipe", "how to make", "cooking", "homemade"}
+_RECIPE_SUFFIXES_KO = {"레시피", "만들기", "요리"}
+
+
+def _normalize_keyword(keyword: str, lang: str) -> str:
+    kw_lower = keyword.lower()
+    if lang == "ko":
+        if not any(s in kw_lower for s in _RECIPE_SUFFIXES_KO):
+            return keyword + " 레시피"
+    else:
+        if not any(s in kw_lower for s in _RECIPE_SUFFIXES_EN):
+            return keyword + " recipe"
+    return keyword
+
 INGREDIENT_UNIT_PATTERN = re.compile(
     r"\b\d+[\s./-]*(cups?|tbsp|tsp|tablespoons?|teaspoons?|g|kg|ml|l|oz|lb|lbs|cloves?|slices?|pieces?)\b",
     re.IGNORECASE,
@@ -73,12 +87,14 @@ def run():
 
     # 2. 키워드 선택 (Priority 가중치 랜덤)
     selected = notion_client.pick_keyword(keywords)
-    logger.info(f"선택된 키워드: '{selected['keyword']}' (Priority: {selected['priority']})")
+    raw_kw = selected["keyword"]
+    search_kw = _normalize_keyword(raw_kw, selected.get("lang", "en"))
+    logger.info(f"선택된 키워드: '{raw_kw}' → 검색어: '{search_kw}' (Priority: {selected['priority']})")
 
     # 3. YouTube 검색
     try:
         videos = youtube_client.search_recipe_videos(
-            keyword=selected["keyword"],
+            keyword=search_kw,
             max_results=YOUTUBE_SEARCH_POOL,
         )
     except Exception as e:

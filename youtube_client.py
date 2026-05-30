@@ -14,6 +14,7 @@ def search_recipe_videos(keyword: str, max_results: int = 10) -> list[dict]:
         "part": "snippet",
         "q": keyword,
         "type": "video",
+        "videoCategoryId": "26",  # Howto & Style — 요리 튜토리얼 카테고리
         "order": "relevance",
         "maxResults": max_results,
         "key": api_key,
