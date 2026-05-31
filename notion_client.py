@@ -138,7 +138,8 @@ def save_video(
         json=payload,
         timeout=10,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise ValueError(f"Notion API {resp.status_code}: {resp.text}")
     return resp.json()["id"]
 
 
