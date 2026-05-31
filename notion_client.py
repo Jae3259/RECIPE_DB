@@ -177,7 +177,7 @@ def update_keyword_searched(page_id: str, current_count: int | None) -> None:
 
 # --- helpers ---
 
-def _rich_text_chunks(text: str, size: int = 2000) -> list[dict]:
+def _rich_text_chunks(text: str, size: int = 1800) -> list[dict]:
     return [{"text": {"content": text[i:i+size]}} for i in range(0, len(text), size)]
 
 
