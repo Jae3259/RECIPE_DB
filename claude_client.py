@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import anthropic
 
 
@@ -65,12 +66,25 @@ meal_context 허용값: Everyday meal, Fine dining, Festive, Street food, Brunch
         }
 
 
+def _preprocess_description(text: str) -> str:
+    """regex로 확실한 노이즈 제거 (URL, 해시태그, 타임스탬프 줄)."""
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'#+\S+', '', text)
+    text = re.sub(r'^\s*\d{1,2}:\d{2}.*$', '', text, flags=re.MULTILINE)  # 00:00 타임스탬프
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def clean_description(description: str) -> str:
     """
     YouTube description에서 레시피 관련 내용만 추출. 언어는 원어 유지.
     실패 시 원본 반환.
     """
     if not description or len(description) < 50:
+        return description
+
+    preprocessed = _preprocess_description(description)
+    if not preprocessed:
         return description
 
     prompt = f"""Extract only the recipe-relevant content from this YouTube cooking video description.
@@ -83,19 +97,17 @@ KEEP:
 - Dish description or background
 
 REMOVE:
-- All URLs (http/https links)
-- Hashtags (#word)
-- Social media handles and links (Instagram, Facebook, TikTok, etc.)
-- Subscribe/like/notification prompts
+- Social media handles and promotion (Instagram, Facebook, TikTok, subscribe prompts)
+- Music credits (Track:, Music by:, Audio Library, etc.)
 - Sponsorship or advertisement text
-- Music credits
 - Channel promotion text
+- Any remaining URLs
 
 If there is no recipe-relevant content at all, return an empty string.
 Return only the extracted text with no additional commentary.
 
 ---
-{description[:4000]}
+{preprocessed[:4000]}
 ---"""
 
     try:
