@@ -67,16 +67,22 @@ meal_context 허용값: Everyday meal, Fine dining, Festive, Street food, Brunch
 
 def clean_description(description: str) -> str:
     """
-    YouTube description에서 재료/조리법 관련 내용만 추출.
-    URL, 해시태그, SNS, 광고 제거. 실패 시 빈 문자열 반환.
+    YouTube description에서 URL, 해시태그, SNS, 광고 제거.
+    실패 시 원본 반환.
     """
     if not description or len(description) < 50:
         return description
 
-    prompt = f"""다음 YouTube 요리 영상 설명에서 재료 목록과 조리법 관련 내용만 추출해줘.
-URL, 해시태그, SNS 링크, 광고, 협찬, 음악 크레딧은 모두 제거해줘.
-레시피 관련 내용이 없으면 빈 문자열을 반환해줘.
-다른 설명 없이 추출된 텍스트만 반환해줘.
+    prompt = f"""다음 YouTube 요리 영상 설명에서 아래 항목들을 제거해줘:
+- URL (http/https로 시작하는 링크)
+- 해시태그 (#으로 시작하는 단어)
+- SNS 계정 정보 (인스타그램, 페이스북, 트위터 등)
+- 광고/협찬 문구
+- 음악 크레딧
+- 구독/좋아요 요청 문구
+
+나머지 내용은 그대로 유지해줘. 재료, 조리법, 영상 설명 등 요리와 관련된 내용은 모두 남겨줘.
+다른 설명 없이 정제된 텍스트만 반환해줘.
 
 ---
 {description[:4000]}
@@ -91,4 +97,4 @@ URL, 해시태그, SNS 링크, 광고, 협찬, 음악 크레딧은 모두 제거
         )
         return message.content[0].text.strip()
     except Exception:
-        return ""
+        return description
